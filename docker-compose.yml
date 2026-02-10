@@ -1,0 +1,39 @@
+services:
+  db:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: promptprocessing-db
+    environment:
+      SA_PASSWORD: ${DB_PASSWORD}
+      ACCEPT_EULA: "Y"
+    ports:
+      - "1433:1433"
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P $${SA_PASSWORD} -Q 'SELECT 1' || exit 1"]
+      interval: 10s
+      retries: 30
+
+  backend:
+    build: 
+      context: ./PromptApi
+      dockerfile: Dockerfile
+    container_name: promptprocessing-backend
+    ports:
+      - "7154:80"
+    env_file:
+      - .env
+    environment:
+      OPENAI_MODEL: ${OPENAI_MODEL}
+      DB_CONNECTION: ${DB_CONNECTION}
+    depends_on:
+      db:
+        condition: service_healthy
+
+  frontend:
+    build: 
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: promptprocessing-frontend
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
