@@ -1,4 +1,5 @@
 ﻿using Microsoft.AspNetCore.Mvc;
+using MassTransit;
 using PromptApi.Domain;
 using PromptApi.Infrastructure;
 using Microsoft.EntityFrameworkCore;
@@ -10,27 +11,25 @@ namespace PromptApi.Controllers;
 public class PromptsController : ControllerBase
 {
     private readonly AppDbContext _db;
+    private readonly IPublishEndpoint _publishEndpoint;
 
-    public PromptsController(AppDbContext db)
+    public PromptsController(AppDbContext db, IPublishEndpoint publishEndpoint)
     {
         _db = db;
+        _publishEndpoint = publishEndpoint;
     }
 
     [HttpPost]
     public async Task<IActionResult> Create([FromBody] string content)
     {
-        var prompt = new Prompt
-        {
-            Id = Guid.NewGuid(),
-            Content = content,
-            Status = PromptStatus.Pending,
-            CreatedAt = DateTime.UtcNow
-        };
+        var prompt = new Prompt(content);
 
         _db.Prompts.Add(prompt);
         await _db.SaveChangesAsync();
+        
+        await _publishEndpoint.Publish(new ProcessPrompt(prompt.Id, content));
 
-        return Ok(prompt);
+        return Accepted(prompt);
     }
 
     [HttpGet]

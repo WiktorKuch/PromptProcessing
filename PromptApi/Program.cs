@@ -1,7 +1,8 @@
+using MassTransit;
 using Microsoft.EntityFrameworkCore;
+using PromptApi.Consumers;
 using PromptApi.Infrastructure;
 using PromptApi.Services;
-using PromptApi.Workers;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -28,29 +29,53 @@ builder.Services.AddDbContext<AppDbContext>(options =>
         ?? builder.Configuration.GetConnectionString("DefaultConnection")
         ?? throw new InvalidOperationException("DB_CONNECTION missing");
 
-    options.UseSqlServer(connectionString);
+    options.UseNpgsql(connectionString);
 });
 
 
 
 
-builder.Services.AddSingleton<IOpenAiService, OpenAiService>();
-builder.Services.AddHostedService<PromptProcessor>();
+builder.Services.AddScoped<IOpenAiService, OpenAiService>();
+
+builder.Services.AddMassTransit(x =>
+{
+    x.AddConsumer<PromptConsumer>();
+
+    x.UsingRabbitMq((context, cfg) =>
+    {
+        cfg.Host("rabbitmq", "/", h =>
+        {
+            h.Username("guest");
+            h.Password("guest");
+        });
+
+        cfg.ReceiveEndpoint("prompt-queue", e =>
+        {
+            e.ConfigureConsumer<PromptConsumer>(context);
+        });
+    });
+});
 
 
 var app = builder.Build();
 
-// Configure the HTTP request pipeline.
-if (app.Environment.IsDevelopment())
+//Configure the HTTP request pipeline.
+
+using (var scope = app.Services.CreateScope())
 {
-    app.UseSwagger();
-    app.UseSwaggerUI();
+    var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+    dbContext.Database.Migrate();
 }
+
+app.UseSwagger();
+app.UseSwaggerUI();
+
 app.UseCors();
-app.UseHttpsRedirection();
+
 
 app.UseAuthorization();
 
 app.MapControllers();
+
 
 app.Run();

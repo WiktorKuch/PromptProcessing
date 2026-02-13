@@ -27,7 +27,7 @@ function App() {
     useEffect(() => {
         const fetchPrompts = async () => {
             try {
-                const response = await fetch('/api/prompts');
+                const response = await fetch('http://localhost:7154/api/prompts');
                 
 
                 const data = await response.json();
@@ -47,7 +47,7 @@ function App() {
         setLoading(true);
 
         try {
-            await fetch('https://localhost:7154/api/prompts', {
+            await fetch('http://localhost:7154/api/prompts', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(input.trim()),
